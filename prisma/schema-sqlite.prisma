@@ -1,0 +1,166 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int            @id @default(autoincrement())
+  username     String         @unique
+  passwordHash String         @map("password_hash")
+  displayName  String?        @map("display_name")
+  photoUrl     String?        @map("photo_url")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  bills        Bill[]
+  bankSettings BankSettings?
+  mergedBills  MergedBill[]
+  customers    Customer[]
+  banks        Bank[]
+  posMachines  POSMachine[]
+
+  @@map("users")
+}
+
+model Customer {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @map("user_id")
+  name          String    @map("name")
+  phone         String?   @map("phone")
+  address       String?   @map("address")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bills         Bill[]
+  mergedBills   MergedBill[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("customers")
+}
+
+model BankSettings {
+  id            Int      @id @default(autoincrement())
+  userId        Int      @unique @map("user_id")
+  bankName      String   @map("bank_name")
+  accountNumber String   @map("account_number")
+  accountHolder String   @map("account_holder")
+  qrImage       String?  @map("qr_image")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("bank_settings")
+}
+
+model Bank {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  name      String   @map("name")
+  shortName String?  @map("short_name")
+  code      String?  @map("code")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("banks")
+}
+
+model POSMachine {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  name      String   @map("name")
+  code      String?  @map("code")
+  feePercent Float   @default(0) @map("fee_percent")
+  note      String?  @map("note")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("pos_machines")
+}
+
+model MergedBill {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @map("user_id")
+  customerId      Int      @map("customer_id")
+  totalAmount     Float    @map("total_amount")
+  totalFeeThu     Float    @map("total_fee_thu")
+  totalTienAm     Float    @default(0) @map("total_tien_am")
+  isCollected     Boolean  @default(false) @map("is_collected")
+  timestamp       BigInt   @map("timestamp")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  bills           Bill[]
+
+  @@index([userId])
+  @@index([customerId])
+  @@map("merged_bills")
+}
+
+model Bill {
+  id              Int           @id @default(autoincrement())
+  userId          Int           @map("user_id")
+  customerId      Int           @map("customer_id")
+  serviceType     ServiceType   @map("service_type")
+  note            String?       @map("note")
+  totalAmount     Float         @map("total_amount")
+  totalFeeThu     Float         @map("total_fee_thu")
+  totalProfit     Float         @map("total_profit")
+  totalBankLai    Float         @default(0) @map("total_bank_lai")
+  totalTienAm     Float         @default(0) @map("total_tien_am")
+  totalPhiPhaiTra Float         @default(0) @map("total_phi_phai_tra")
+  isCollected     Boolean       @default(false) @map("is_collected")
+  paymentType     String?       @map("payment_type")
+  paymentMethod   String?       @map("payment_method")
+  timestamp       BigInt        @map("timestamp")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  rows            BillRow[]
+  mergedBillId    Int?          @map("merged_bill_id")
+  mergedBill      MergedBill?   @relation(fields: [mergedBillId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([timestamp])
+  @@index([customerId])
+  @@index([mergedBillId])
+  @@map("bills")
+}
+
+model BillRow {
+  id               Int      @id @default(autoincrement())
+  billId           Int      @map("bill_id")
+  rowUuid          String   @unique @map("row_uuid")
+  amount           Float    @map("amount")
+  swipedAmount     Float?   @map("swiped_amount")
+  feeGocPercent    Float    @map("fee_goc_percent")
+  feeThuPercent    Float    @map("fee_thu_percent")
+  rowNote          String?  @map("row_note")
+  bankName         String?  @map("bank_name")
+  paymentType      String?  @map("payment_type")
+  paymentMethod    String?  @map("payment_method")
+  createdAt        DateTime @default(now()) @map("created_at")
+  bill             Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+  @@map("bill_rows")
+}
+
+enum ServiceType {
+  RÚT_CHUYỂN
+  ĐÁO_THẺ
+}

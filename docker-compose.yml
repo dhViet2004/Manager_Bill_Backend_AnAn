@@ -1,0 +1,53 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: managerbill_db
+    restart: always
+    env_file:
+      - .env.vps
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: managerbill_anan
+      MYSQL_USER: managerbill
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    # ĐÃ XÓA PHẦN PORTS Ở ĐÂY ĐỂ CHỐNG HACKER
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - managerbill_network
+
+  backend:
+    image: ${DOCKERHUB_USERNAME}/managerbill-backend:latest
+    container_name: managerbill_backend
+    restart: always
+    env_file:
+      - .env.vps
+    ports:
+      - "${PORT:-4001}:${PORT:-4001}"
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-4001}
+      # Backend vẫn kết nối được tới DB qua tên host 'db' nhờ chung Network
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/managerbill_anan
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      BACKEND_URL: ${BACKEND_URL}
+      FRONTEND_URL: ${FRONTEND_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - managerbill_network
+
+volumes:
+  mysql_data: # Dữ liệu sẽ được giữ lại vĩnh viễn ở đây
+
+networks:
+  managerbill_network:
+    driver: bridge
