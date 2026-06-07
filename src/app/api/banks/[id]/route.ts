@@ -9,12 +9,47 @@ import {
   notFoundResponse,
 } from '@/lib/response';
 
+const toOptionalString = (value: unknown) =>
+  typeof value === 'string' && value.trim() ? value.trim() : null;
+
+const toLastFourDigits = (value: unknown) => {
+  const normalized = toOptionalString(value);
+  if (!normalized) return null;
+  return normalized.replace(/\D/g, '').slice(-4) || null;
+};
+
+const transformBank = (bank: {
+  id: number;
+  name: string;
+  shortName: string | null;
+  code: string | null;
+  cardHolderName: string | null;
+  cardType: string | null;
+  lastFourDigits: string | null;
+  posMachineName: string | null;
+  collaboratorName: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) => ({
+  id: bank.id,
+  name: bank.name,
+  shortName: bank.shortName || undefined,
+  code: bank.code || undefined,
+  cardHolderName: bank.cardHolderName || undefined,
+  cardType: bank.cardType || undefined,
+  lastFourDigits: bank.lastFourDigits || undefined,
+  posMachineName: bank.posMachineName || undefined,
+  collaboratorName: bank.collaboratorName || undefined,
+  createdAt: bank.createdAt,
+  updatedAt: bank.updatedAt,
+});
+
 // OPTIONS /api/banks/[id] - Handle CORS preflight
 export async function OPTIONS() {
   return corsOptionsResponse();
 }
 
-// PUT /api/banks/[id] - Cập nhật ngân hàng
+// PUT /api/banks/[id] - Cap nhat the
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -33,9 +68,17 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, shortName, code } = body;
+    const {
+      name,
+      shortName,
+      code,
+      cardHolderName,
+      cardType,
+      lastFourDigits,
+      posMachineName,
+      collaboratorName,
+    } = body;
 
-    // Check if bank exists and belongs to user
     const existingBank = await prisma.bank.findFirst({
       where: {
         id: bankId,
@@ -47,47 +90,48 @@ export async function PUT(
       return notFoundResponse('Bank not found');
     }
 
-    // Check if new name conflicts with another bank
-    if (name && name.trim() !== existingBank.name) {
-      const conflictingBank = await prisma.bank.findFirst({
-        where: {
-          userId: tokenUser.userId,
-          name: name.trim(),
-          id: { not: bankId },
-        },
-      });
+    const normalizedName = typeof name === 'string' && name.trim()
+      ? name.trim()
+      : existingBank.name;
+    const normalizedLastFourDigits = lastFourDigits !== undefined
+      ? toLastFourDigits(lastFourDigits)
+      : existingBank.lastFourDigits;
 
-      if (conflictingBank) {
-        return errorResponse('Ngân hàng đã tồn tại', 400);
-      }
+    const conflictingBank = await prisma.bank.findFirst({
+      where: {
+        userId: tokenUser.userId,
+        name: normalizedName,
+        lastFourDigits: normalizedLastFourDigits,
+        id: { not: bankId },
+      },
+    });
+
+    if (conflictingBank) {
+      return errorResponse('The da ton tai', 400);
     }
 
     const bank = await prisma.bank.update({
       where: { id: bankId },
       data: {
-        name: name?.trim() || existingBank.name,
-        shortName: shortName?.trim() || null,
-        code: code?.trim() || null,
+        name: normalizedName,
+        shortName: shortName !== undefined ? toOptionalString(shortName) : existingBank.shortName,
+        code: code !== undefined ? toOptionalString(code) : existingBank.code,
+        cardHolderName: cardHolderName !== undefined ? toOptionalString(cardHolderName) : existingBank.cardHolderName,
+        cardType: cardType !== undefined ? toOptionalString(cardType) : existingBank.cardType,
+        lastFourDigits: normalizedLastFourDigits,
+        posMachineName: posMachineName !== undefined ? toOptionalString(posMachineName) : existingBank.posMachineName,
+        collaboratorName: collaboratorName !== undefined ? toOptionalString(collaboratorName) : existingBank.collaboratorName,
       },
     });
 
-    const response = {
-      id: bank.id,
-      name: bank.name,
-      shortName: bank.shortName || undefined,
-      code: bank.code || undefined,
-      createdAt: bank.createdAt,
-      updatedAt: bank.updatedAt,
-    };
-
-    return successResponse(response);
+    return successResponse(transformBank(bank));
   } catch (error) {
     console.error('Update bank error:', error);
     return errorResponse('Internal server error', 500);
   }
 }
 
-// DELETE /api/banks/[id] - Xóa ngân hàng
+// DELETE /api/banks/[id] - Xoa the
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -105,7 +149,6 @@ export async function DELETE(
       return errorResponse('Invalid bank ID', 400);
     }
 
-    // Check if bank exists and belongs to user
     const existingBank = await prisma.bank.findFirst({
       where: {
         id: bankId,
@@ -121,7 +164,7 @@ export async function DELETE(
       where: { id: bankId },
     });
 
-    return successResponse({ message: 'Bank deleted successfully' });
+    return successResponse({ message: 'Card deleted successfully' });
   } catch (error) {
     console.error('Delete bank error:', error);
     return errorResponse('Internal server error', 500);

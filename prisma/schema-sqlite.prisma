@@ -59,16 +59,21 @@ model BankSettings {
 }
 
 model Bank {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @map("user_id")
-  name      String   @map("name")
-  shortName String?  @map("short_name")
-  code      String?  @map("code")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               Int      @id @default(autoincrement())
+  userId           Int      @map("user_id")
+  name             String   @map("name")
+  shortName        String?  @map("short_name")
+  code             String?  @map("code")
+  cardHolderName   String?  @map("card_holder_name")
+  cardType         String?  @map("card_type")
+  lastFourDigits   String?  @map("last_four_digits")
+  posMachineName   String?  @map("pos_machine_name")
+  collaboratorName String?  @map("collaborator_name")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, name])
+  @@unique([userId, name, lastFourDigits])
   @@index([userId])
   @@map("banks")
 }

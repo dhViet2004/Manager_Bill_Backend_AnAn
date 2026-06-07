@@ -135,6 +135,11 @@ export interface BankResponse {
   name: string;
   shortName?: string;
   code?: string;
+  cardHolderName?: string;
+  cardType?: string;
+  lastFourDigits?: string;
+  posMachineName?: string;
+  collaboratorName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -143,6 +148,11 @@ export interface BankInput {
   name: string;
   shortName?: string;
   code?: string;
+  cardHolderName?: string;
+  cardType?: string;
+  lastFourDigits?: string;
+  posMachineName?: string;
+  collaboratorName?: string;
 }
 
 // POS Machine
