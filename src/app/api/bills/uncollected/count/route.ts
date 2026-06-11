@@ -7,6 +7,8 @@ import {
   unauthorizedResponse,
 } from '@/lib/response';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/bills/uncollected/count - Đếm số bill chưa thu tiền
 export async function GET(request: NextRequest) {
   try {

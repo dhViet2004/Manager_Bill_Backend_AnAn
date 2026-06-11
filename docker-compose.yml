@@ -7,8 +7,8 @@ services:
       - .env.vps
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: managerbill_anan
-      MYSQL_USER: managerbill
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     # ĐÃ XÓA PHẦN PORTS Ở ĐÂY ĐỂ CHỐNG HACKER
     volumes:
@@ -23,7 +23,10 @@ services:
       - managerbill_network
 
   backend:
-    image: ${DOCKERHUB_USERNAME}/managerbill-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: managerbill-backend:latest
     container_name: managerbill_backend
     restart: always
     env_file:
@@ -34,7 +37,7 @@ services:
       NODE_ENV: production
       PORT: ${PORT:-4001}
       # Backend vẫn kết nối được tới DB qua tên host 'db' nhờ chung Network
-      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/managerbill_anan
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       BACKEND_URL: ${BACKEND_URL}

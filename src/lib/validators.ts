@@ -18,6 +18,7 @@ export const BillRowSchema = z.object({
   feeGocPercent: z.number().min(0).max(100),
   feeThuPercent: z.number().min(0).max(100),
   rowNote: z.string().optional(),
+  bankId: z.number().int().positive().nullable().optional(),
   bankName: z.string().optional(),
   collectionAmount: z.number().optional(),
   paymentType: z.enum(['QR', 'POS']).optional(),
@@ -49,6 +50,11 @@ export const UpdateBillSchema = z.object({
   rows: z.array(BillRowSchema).optional(),
   collectionEntries: z.array(z.object({
     rowId: z.string().min(1),
+    amount: z.number().positive(),
+  })).optional(),
+  posEntries: z.array(z.object({
+    rowId: z.string().min(1),
+    type: z.enum(['DEPOSIT', 'WITHDRAW']),
     amount: z.number().positive(),
   })).optional(),
 });

@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
                 feeGocPercent: true,
                 feeThuPercent: true,
                 rowNote: true,
+                bankId: true,
                 bankName: true,
                 paymentType: true,
                 paymentMethod: true,
@@ -106,6 +107,7 @@ export async function GET(request: NextRequest) {
           feeGocPercent: Number(row.feeGocPercent),
           feeThuPercent: Number(row.feeThuPercent),
           rowNote: row.rowNote || undefined,
+          bankId: row.bankId || undefined,
           bankName: row.bankName || undefined,
           paymentType: row.paymentType || undefined,
           paymentMethod: row.paymentMethod || undefined,
@@ -175,8 +177,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // NOTE: We allow merging bills from different customers.
-    // The mergedBill will be assigned to the selected customerId.
+    // Merged bills must follow the customer already assigned to each bill.
+    const hasDifferentCustomers = bills.some((b) => b.customerId !== bills[0].customerId);
+    if (hasDifferentCustomers || bills[0].customerId !== customerId) {
+      return errorResponse('Ch\u1ec9 c\u00f3 th\u1ec3 g\u1ed9p c\u00e1c bill c\u00f9ng kh\u00e1ch h\u00e0ng', 400);
+    }
 
     // Calculate totals from all bills
     const totalAmount = bills.reduce((sum, b) => sum + Number(b.totalAmount), 0);
@@ -222,6 +227,7 @@ export async function POST(request: NextRequest) {
                 feeGocPercent: true,
                 feeThuPercent: true,
                 rowNote: true,
+                bankId: true,
                 bankName: true,
                 paymentType: true,
                 paymentMethod: true,
@@ -288,6 +294,7 @@ export async function POST(request: NextRequest) {
           feeGocPercent: Number(row.feeGocPercent),
           feeThuPercent: Number(row.feeThuPercent),
           rowNote: row.rowNote || undefined,
+          bankId: row.bankId || undefined,
           bankName: row.bankName || undefined,
           paymentType: row.paymentType || undefined,
           paymentMethod: row.paymentMethod || undefined,

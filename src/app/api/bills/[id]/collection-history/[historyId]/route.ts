@@ -78,6 +78,9 @@ export async function DELETE(
             collectionHistory: {
               orderBy: { timestamp: 'asc' },
             },
+            posHistory: {
+              orderBy: { timestamp: 'asc' },
+            },
           },
         },
       },
@@ -128,9 +131,16 @@ export async function DELETE(
         feeGocPercent: Number(row.feeGocPercent),
         feeThuPercent: Number(row.feeThuPercent),
         rowNote: row.rowNote || undefined,
+        bankId: row.bankId || undefined,
         bankName: row.bankName || undefined,
         collectionHistory: row.collectionHistory.map((h) => ({
           id: h.id,
+          amount: Number(h.amount),
+          timestamp: h.timestamp.toISOString(),
+        })),
+        posHistory: row.posHistory.map((h) => ({
+          id: h.id,
+          type: h.type,
           amount: Number(h.amount),
           timestamp: h.timestamp.toISOString(),
         })),

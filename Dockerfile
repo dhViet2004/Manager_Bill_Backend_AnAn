@@ -41,20 +41,14 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/.bin ./node_modules/.bin
-COPY --from=builder /app/node_modules/tsx ./node_modules/tsx
 
 COPY <<EOF /app/start.sh
 #!/bin/sh
 set -e
-echo "=== 1. Prisma schema sync ==="
-./node_modules/.bin/prisma db push --accept-data-loss --skip-generate
+echo "=== 1. Applying Prisma migrations ==="
+./node_modules/.bin/prisma migrate deploy
 
-echo "=== 2. Running data migrations ==="
-./node_modules/.bin/tsx ./prisma/migrate-collected-amount.ts || {
-  echo "Migration script exited with code $? (this is OK if already migrated)"
-}
-
-echo "=== 3. Starting application ==="
+echo "=== 2. Starting application ==="
 exec node server.js
 EOF
 

@@ -7,9 +7,9 @@ import { hash } from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const username = 'lamanh';
-  const password = 'Tinhkhiet1995@';
-  const displayName = 'Lâm Anh';
+  const username = 'admin';
+  const password = 'admin123';
+  const displayName = 'Admin';
 
   // Kiểm tra user đã tồn tại
   const existingUser = await prisma.user.findUnique({

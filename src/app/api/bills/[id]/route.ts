@@ -12,6 +12,45 @@ import {
   notFoundResponse,
 } from '@/lib/response';
 
+const formatBankCardLabel = (bank: {
+  name: string;
+  lastFourDigits: string | null;
+  cardHolderName: string | null;
+  collaboratorName: string | null;
+}) => [
+  bank.name,
+  bank.lastFourDigits ? `**** ${bank.lastFourDigits}` : '',
+  bank.cardHolderName ? `- ${bank.cardHolderName}` : '',
+  bank.collaboratorName ? `(${bank.collaboratorName})` : '',
+].filter(Boolean).join(' ');
+
+async function getBankLabelMap(rows: { bankId?: number | null }[], userId: number) {
+  const bankIds = Array.from(new Set(
+    rows.map(row => row.bankId).filter((bankId): bankId is number => typeof bankId === 'number')
+  ));
+
+  if (bankIds.length === 0) {
+    return new Map<number, string>();
+  }
+
+  const banks = await prisma.bank.findMany({
+    where: { id: { in: bankIds }, userId },
+    select: {
+      id: true,
+      name: true,
+      lastFourDigits: true,
+      cardHolderName: true,
+      collaboratorName: true,
+    },
+  });
+
+  if (banks.length !== bankIds.length) {
+    throw new Error('INVALID_BANK_CARD');
+  }
+
+  return new Map(banks.map(bank => [bank.id, formatBankCardLabel(bank)]));
+}
+
 // OPTIONS /api/bills/[id] - Handle CORS preflight
 export async function OPTIONS() {
   return corsOptionsResponse();
@@ -45,6 +84,9 @@ export async function GET(
         rows: {
           include: {
             collectionHistory: {
+              orderBy: { timestamp: 'asc' },
+            },
+            posHistory: {
               orderBy: { timestamp: 'asc' },
             },
           },
@@ -88,11 +130,18 @@ export async function GET(
         feeGocPercent: Number(row.feeGocPercent),
         feeThuPercent: Number(row.feeThuPercent),
         rowNote: row.rowNote || undefined,
+        bankId: row.bankId || undefined,
         bankName: row.bankName || undefined,
         paymentType: row.paymentType || undefined,
         paymentMethod: row.paymentMethod || undefined,
         collectionHistory: row.collectionHistory.map(h => ({
           id: h.id,
+          amount: Number(h.amount),
+          timestamp: h.timestamp.toISOString(),
+        })),
+        posHistory: row.posHistory.map(h => ({
+          id: h.id,
+          type: h.type,
           amount: Number(h.amount),
           timestamp: h.timestamp.toISOString(),
         })),
@@ -144,7 +193,7 @@ export async function PUT(
       return errorResponse(`Validation error: ${result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')}`, 400);
     }
 
-    const { customerId, serviceType, note, isCollected, paymentType, paymentMethod, rows, collectionEntries } = result.data;
+    const { customerId, serviceType, note, isCollected, paymentType, paymentMethod, rows, collectionEntries, posEntries } = result.data;
     console.log('[updateBill] parsed paymentType:', paymentType, 'paymentMethod:', paymentMethod);
     if (rows) {
       console.log('[updateBill] rows[0] paymentType:', rows[0]?.paymentType, 'paymentMethod:', rows[0]?.paymentMethod);
@@ -177,6 +226,15 @@ export async function PUT(
     // Full row update with recalculation
     if (rows) {
       const calculation = calculateBill(rows, serviceType as ServiceType || DbToServiceType[existingBill.serviceType] as ServiceType);
+      let bankLabelById: Map<number, string>;
+      try {
+        bankLabelById = await getBankLabelMap(rows, tokenUser.userId);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'INVALID_BANK_CARD') {
+          return errorResponse('Tháº» khÃ´ng tá»“n táº¡i hoáº·c khÃ´ng thuá»™c tÃ i khoáº£n nÃ y', 400);
+        }
+        throw error;
+      }
       updateData.totalAmount = calculation.totalAmount;
       updateData.totalFeeThu = calculation.totalFeeThu;
       updateData.totalProfit = calculation.totalProfit;
@@ -205,7 +263,8 @@ export async function PUT(
             feeGocPercent: row.feeGocPercent,
             feeThuPercent: row.feeThuPercent,
             rowNote: row.rowNote || null,
-            bankName: row.bankName || null,
+            bankId: row.bankId || null,
+            bankName: row.bankId ? bankLabelById.get(row.bankId) || null : row.bankName || null,
             paymentType: row.paymentType ?? null,
             paymentMethod: row.paymentMethod ?? null,
           };
@@ -243,6 +302,106 @@ export async function PUT(
       }
     }
 
+    if (posEntries && posEntries.length > 0) {
+      const existingRows = await prisma.billRow.findMany({
+        where: { billId },
+        include: { posHistory: true },
+      });
+      const posCreates: { billRowId: number; type: string; amount: number }[] = [];
+      const rowTotals = new Map(existingRows.map(row => {
+        const deposited = row.posHistory
+          .filter(history => history.type === 'DEPOSIT')
+          .reduce((sum, history) => sum + Number(history.amount), 0);
+        const withdrawn = row.posHistory
+          .filter(history => history.type === 'WITHDRAW')
+          .reduce((sum, history) => sum + Number(history.amount), 0);
+
+        return [row.rowUuid, {
+          amount: Number(row.amount),
+          deposited,
+          withdrawn,
+        }];
+      }));
+
+      for (const entry of posEntries) {
+        const row = existingRows.find(r => r.rowUuid === entry.rowId);
+        if (!row) continue;
+        const totals = rowTotals.get(entry.rowId);
+        if (!totals) continue;
+        const amount = Math.round(entry.amount);
+
+        if (entry.type === 'DEPOSIT') {
+          const maxDeposit = Math.max(totals.amount - totals.deposited, 0);
+          if (amount > maxDeposit) {
+            return errorResponse(`Số tiền nạp vượt quá số tiền có thể nạp của dòng ${row.bankName || row.rowUuid}`, 400);
+          }
+          totals.deposited += amount;
+        } else {
+          const maxWithdraw = Math.max(totals.deposited - totals.withdrawn, 0);
+          if (amount > maxWithdraw) {
+            return errorResponse(`Số tiền rút vượt quá số tiền có thể rút của dòng ${row.bankName || row.rowUuid}`, 400);
+          }
+          totals.withdrawn += amount;
+        }
+
+        posCreates.push({
+          billRowId: row.id,
+          type: entry.type,
+          amount,
+        });
+      }
+
+      if (posCreates.length > 0) {
+        await prisma.posHistoryEntry.createMany({ data: posCreates });
+      }
+
+      if (posEntries.some(entry => entry.type === 'WITHDRAW')) {
+        const rowsWithPosHistory = await prisma.billRow.findMany({
+          where: { billId },
+          include: { posHistory: true },
+        });
+
+        const recalculationRows = rowsWithPosHistory.map(row => {
+          const totalWithdrawn = row.posHistory
+            .filter(history => history.type === 'WITHDRAW')
+            .reduce((sum, history) => sum + Number(history.amount), 0);
+
+          return {
+            id: row.rowUuid,
+            amount: Number(row.amount),
+            swipedAmount: totalWithdrawn,
+            feeGocPercent: Number(row.feeGocPercent),
+            feeThuPercent: Number(row.feeThuPercent),
+            rowNote: row.rowNote || undefined,
+            bankId: row.bankId || null,
+            bankName: row.bankName || undefined,
+            paymentType: row.paymentType || undefined,
+            paymentMethod: row.paymentMethod || undefined,
+          };
+        });
+
+        await Promise.all(rowsWithPosHistory.map(row => {
+          const totalWithdrawn = row.posHistory
+            .filter(history => history.type === 'WITHDRAW')
+            .reduce((sum, history) => sum + Number(history.amount), 0);
+
+          return prisma.billRow.update({
+            where: { id: row.id },
+            data: { swipedAmount: totalWithdrawn || null },
+          });
+        }));
+
+        const targetServiceType = serviceType || DbToServiceType[existingBill.serviceType] as ServiceType;
+        const calculation = calculateBill(recalculationRows, targetServiceType);
+        updateData.totalAmount = calculation.totalAmount;
+        updateData.totalFeeThu = calculation.totalFeeThu;
+        updateData.totalProfit = calculation.totalProfit;
+        updateData.totalBankLai = calculation.totalBankLai;
+        updateData.totalTienAm = calculation.totalTienAm;
+        updateData.totalPhiPhaiTra = calculation.totalPhiPhaiTra;
+      }
+    }
+
     const bill = await prisma.bill.update({
       where: { id: billId },
       data: updateData,
@@ -251,6 +410,9 @@ export async function PUT(
         rows: {
           include: {
             collectionHistory: {
+              orderBy: { timestamp: 'asc' },
+            },
+            posHistory: {
               orderBy: { timestamp: 'asc' },
             },
           },
@@ -290,11 +452,18 @@ export async function PUT(
         feeGocPercent: Number(row.feeGocPercent),
         feeThuPercent: Number(row.feeThuPercent),
         rowNote: row.rowNote || undefined,
+        bankId: row.bankId || undefined,
         bankName: row.bankName || undefined,
         paymentType: row.paymentType || undefined,
         paymentMethod: row.paymentMethod || undefined,
         collectionHistory: row.collectionHistory.map(h => ({
           id: h.id,
+          amount: Number(h.amount),
+          timestamp: h.timestamp.toISOString(),
+        })),
+        posHistory: row.posHistory.map(h => ({
+          id: h.id,
+          type: h.type,
           amount: Number(h.amount),
           timestamp: h.timestamp.toISOString(),
         })),

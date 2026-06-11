@@ -10,6 +10,45 @@ import {
   unauthorizedResponse,
 } from '@/lib/response';
 
+const formatBankCardLabel = (bank: {
+  name: string;
+  lastFourDigits: string | null;
+  cardHolderName: string | null;
+  collaboratorName: string | null;
+}) => [
+  bank.name,
+  bank.lastFourDigits ? `**** ${bank.lastFourDigits}` : '',
+  bank.cardHolderName ? `- ${bank.cardHolderName}` : '',
+  bank.collaboratorName ? `(${bank.collaboratorName})` : '',
+].filter(Boolean).join(' ');
+
+async function getBankLabelMap(rows: { bankId?: number | null }[], userId: number) {
+  const bankIds = Array.from(new Set(
+    rows.map(row => row.bankId).filter((bankId): bankId is number => typeof bankId === 'number')
+  ));
+
+  if (bankIds.length === 0) {
+    return new Map<number, string>();
+  }
+
+  const banks = await prisma.bank.findMany({
+    where: { id: { in: bankIds }, userId },
+    select: {
+      id: true,
+      name: true,
+      lastFourDigits: true,
+      cardHolderName: true,
+      collaboratorName: true,
+    },
+  });
+
+  if (banks.length !== bankIds.length) {
+    throw new Error('INVALID_BANK_CARD');
+  }
+
+  return new Map(banks.map(bank => [bank.id, formatBankCardLabel(bank)]));
+}
+
 // GET /api/bills - Lấy danh sách bills
 export async function GET(request: NextRequest) {
   try {
@@ -75,6 +114,9 @@ export async function GET(request: NextRequest) {
             collectionHistory: {
               orderBy: { timestamp: 'asc' },
             },
+            posHistory: {
+              orderBy: { timestamp: 'asc' },
+            },
           },
         },
       },
@@ -113,11 +155,18 @@ export async function GET(request: NextRequest) {
         feeGocPercent: Number(row.feeGocPercent),
         feeThuPercent: Number(row.feeThuPercent),
         rowNote: row.rowNote || undefined,
+        bankId: row.bankId || undefined,
         bankName: row.bankName || undefined,
         paymentType: row.paymentType || undefined,
         paymentMethod: row.paymentMethod || undefined,
         collectionHistory: (row.collectionHistory || []).map(h => ({
           id: h.id,
+          amount: Number(h.amount),
+          timestamp: h.timestamp.toISOString(),
+        })),
+        posHistory: (row.posHistory || []).map(h => ({
+          id: h.id,
+          type: h.type,
           amount: Number(h.amount),
           timestamp: h.timestamp.toISOString(),
         })),
@@ -173,6 +222,15 @@ export async function POST(request: NextRequest) {
 
     // Calculate totals
     const calculation = calculateBill(rows, serviceType as ServiceType);
+    let bankLabelById: Map<number, string>;
+    try {
+      bankLabelById = await getBankLabelMap(rows, tokenUser.userId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'INVALID_BANK_CARD') {
+        return errorResponse('Tháº» khÃ´ng tá»“n táº¡i hoáº·c khÃ´ng thuá»™c tÃ i khoáº£n nÃ y', 400);
+      }
+      throw error;
+    }
 
     // Create bill with rows
     const bill = await prisma.bill.create({
@@ -199,7 +257,8 @@ export async function POST(request: NextRequest) {
             feeGocPercent: row.feeGocPercent,
             feeThuPercent: row.feeThuPercent,
             rowNote: row.rowNote || null,
-            bankName: row.bankName || null,
+            bankId: row.bankId || null,
+            bankName: row.bankId ? bankLabelById.get(row.bankId) || null : row.bankName || null,
             paymentType: row.paymentType || null,
             paymentMethod: row.paymentMethod || null,
           })),
@@ -207,7 +266,13 @@ export async function POST(request: NextRequest) {
       },
       include: {
         customer: true,
-        rows: true,
+        rows: {
+          include: {
+            posHistory: {
+              orderBy: { timestamp: 'asc' },
+            },
+          },
+        },
       },
     });
 
@@ -241,16 +306,18 @@ export async function POST(request: NextRequest) {
 
         if (existingMerged) {
           // ── Khách đã có group → thêm bill mới vào group cũ ──
-          const allBills = [...unmergedBills];
+          await prisma.bill.updateMany({
+            where: { id: { in: unmergedBills.map((b) => b.id) } },
+            data: { mergedBillId: existingMerged.id },
+          });
+
+          const allBills = await prisma.bill.findMany({
+            where: { mergedBillId: existingMerged.id },
+          });
           const totalAmount = allBills.reduce((sum, b) => sum + Number(b.totalAmount), 0);
           const totalFeeThu = allBills.reduce((sum, b) => sum + Number(b.totalFeeThu), 0);
           const totalTienAm = allBills.reduce((sum, b) => sum + Number(b.totalTienAm), 0);
           const latestTimestamp = Math.max(...allBills.map((b) => Number(b.timestamp)));
-
-          await prisma.bill.updateMany({
-            where: { id: { in: allBills.map((b) => b.id) } },
-            data: { mergedBillId: existingMerged.id },
-          });
 
           await prisma.mergedBill.update({
             where: { id: existingMerged.id },
@@ -327,10 +394,17 @@ export async function POST(request: NextRequest) {
         feeGocPercent: Number(row.feeGocPercent),
         feeThuPercent: Number(row.feeThuPercent),
         rowNote: row.rowNote || undefined,
+        bankId: row.bankId || undefined,
         bankName: row.bankName || undefined,
         paymentType: row.paymentType || undefined,
         paymentMethod: row.paymentMethod || undefined,
         collectionHistory: [],
+        posHistory: row.posHistory.map(h => ({
+          id: h.id,
+          type: h.type,
+          amount: Number(h.amount),
+          timestamp: h.timestamp.toISOString(),
+        })),
       })),
     };
 

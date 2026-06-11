@@ -36,6 +36,7 @@ export interface BillRowInput {
   feeGocPercent: number;
   feeThuPercent: number;
   rowNote?: string;
+  bankId?: number | null;
   bankName?: string;
   paymentType?: string;
   paymentMethod?: string;
@@ -43,6 +44,15 @@ export interface BillRowInput {
 
 export interface CollectionHistoryEntryResponse {
   id: number;
+  amount: number;
+  timestamp: string;
+}
+
+export type PosHistoryType = 'DEPOSIT' | 'WITHDRAW';
+
+export interface PosHistoryEntryResponse {
+  id: number;
+  type: PosHistoryType;
   amount: number;
   timestamp: string;
 }
@@ -55,10 +65,12 @@ export interface BillRowResponse {
   feeGocPercent: number;
   feeThuPercent: number;
   rowNote?: string;
+  bankId?: number | null;
   bankName?: string;
   paymentType?: string;
   paymentMethod?: string;
   collectionHistory?: CollectionHistoryEntryResponse[];
+  posHistory?: PosHistoryEntryResponse[];
 }
 
 // Bill
@@ -133,12 +145,10 @@ export interface BankSettingsResponse {
 export interface BankResponse {
   id: number;
   name: string;
-  shortName?: string;
   code?: string;
   cardHolderName?: string;
   cardType?: string;
   lastFourDigits?: string;
-  posMachineName?: string;
   collaboratorName?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -146,12 +156,10 @@ export interface BankResponse {
 
 export interface BankInput {
   name: string;
-  shortName?: string;
   code?: string;
   cardHolderName?: string;
   cardType?: string;
   lastFourDigits?: string;
-  posMachineName?: string;
   collaboratorName?: string;
 }
 

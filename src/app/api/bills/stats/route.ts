@@ -4,6 +4,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { StatsQuerySchema } from '@/lib/validators';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/response';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const tokenUser = await getCurrentUser(request);

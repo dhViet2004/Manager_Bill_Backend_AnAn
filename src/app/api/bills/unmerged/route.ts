@@ -4,6 +4,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { DbToServiceType, ServiceType } from '@/types';
 import { successResponse, unauthorizedResponse } from '@/lib/response';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/bills/unmerged - Lấy tất cả bill chưa gộp, không phân trang
 export async function GET(request: NextRequest) {
   try {

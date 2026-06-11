@@ -21,24 +21,20 @@ const toLastFourDigits = (value: unknown) => {
 const transformBank = (bank: {
   id: number;
   name: string;
-  shortName: string | null;
   code: string | null;
   cardHolderName: string | null;
   cardType: string | null;
   lastFourDigits: string | null;
-  posMachineName: string | null;
   collaboratorName: string | null;
   createdAt: Date;
   updatedAt: Date;
 }) => ({
   id: bank.id,
   name: bank.name,
-  shortName: bank.shortName || undefined,
   code: bank.code || undefined,
   cardHolderName: bank.cardHolderName || undefined,
   cardType: bank.cardType || undefined,
   lastFourDigits: bank.lastFourDigits || undefined,
-  posMachineName: bank.posMachineName || undefined,
   collaboratorName: bank.collaboratorName || undefined,
   createdAt: bank.createdAt,
   updatedAt: bank.updatedAt,
@@ -70,12 +66,10 @@ export async function PUT(
     const body = await request.json();
     const {
       name,
-      shortName,
       code,
       cardHolderName,
       cardType,
       lastFourDigits,
-      posMachineName,
       collaboratorName,
     } = body;
 
@@ -114,12 +108,10 @@ export async function PUT(
       where: { id: bankId },
       data: {
         name: normalizedName,
-        shortName: shortName !== undefined ? toOptionalString(shortName) : existingBank.shortName,
         code: code !== undefined ? toOptionalString(code) : existingBank.code,
         cardHolderName: cardHolderName !== undefined ? toOptionalString(cardHolderName) : existingBank.cardHolderName,
         cardType: cardType !== undefined ? toOptionalString(cardType) : existingBank.cardType,
         lastFourDigits: normalizedLastFourDigits,
-        posMachineName: posMachineName !== undefined ? toOptionalString(posMachineName) : existingBank.posMachineName,
         collaboratorName: collaboratorName !== undefined ? toOptionalString(collaboratorName) : existingBank.collaboratorName,
       },
     });
