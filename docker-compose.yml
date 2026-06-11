@@ -26,7 +26,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: managerbill-backend:latest
+    image: ${DOCKERHUB_USERNAME}/managerbill-backend:latest
     container_name: managerbill_backend
     restart: always
     env_file:
