@@ -109,6 +109,7 @@ export async function GET(request: NextRequest) {
       take: limit as number,
       include: {
         customer: true,
+        assignee: true,
         rows: {
           include: {
             collectionHistory: {
@@ -134,6 +135,12 @@ export async function GET(request: NextRequest) {
         address: bill.customer.address || undefined,
         createdAt: bill.customer.createdAt,
         updatedAt: bill.customer.updatedAt,
+      } : undefined,
+      assigneeId: bill.assigneeId || undefined,
+      assignee: bill.assignee ? {
+        id: bill.assignee.id,
+        name: bill.assignee.name,
+        phone: bill.assignee.phone || undefined,
       } : undefined,
       serviceType: DbToServiceType[bill.serviceType] as ServiceType,
       note: bill.note ?? undefined,
@@ -204,7 +211,7 @@ export async function POST(request: NextRequest) {
       return errorResponse(result.error.errors[0].message, 400);
     }
 
-    const { customerId, serviceType, note, isCollected, paymentType, paymentMethod, rows } = result.data;
+    const { customerId, assigneeId, serviceType, note, isCollected, paymentType, paymentMethod, rows } = result.data;
     console.log('[createBill] parsed paymentType:', paymentType, 'paymentMethod:', paymentMethod);
     console.log('[createBill] rows[0] paymentType:', rows[0]?.paymentType, 'paymentMethod:', rows[0]?.paymentMethod);
 
@@ -237,6 +244,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: tokenUser.userId,
         customerId,
+        assigneeId: assigneeId || null,
         serviceType: ServiceTypeToDb[serviceType as ServiceType],
         note: note || null,
         isCollected: isCollected ?? false,
@@ -266,6 +274,7 @@ export async function POST(request: NextRequest) {
       },
       include: {
         customer: true,
+        assignee: true,
         rows: {
           include: {
             posHistory: {
@@ -373,6 +382,12 @@ export async function POST(request: NextRequest) {
         address: bill.customer.address || undefined,
         createdAt: bill.customer.createdAt,
         updatedAt: bill.customer.updatedAt,
+      } : undefined,
+      assigneeId: bill.assigneeId || undefined,
+      assignee: bill.assignee ? {
+        id: bill.assignee.id,
+        name: bill.assignee.name,
+        phone: bill.assignee.phone || undefined,
       } : undefined,
       serviceType: DbToServiceType[bill.serviceType] as ServiceType,
       note: bill.note,

@@ -150,6 +150,7 @@ export interface BankResponse {
   cardType?: string;
   lastFourDigits?: string;
   collaboratorName?: string;
+  isReturned: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -161,6 +162,7 @@ export interface BankInput {
   cardType?: string;
   lastFourDigits?: string;
   collaboratorName?: string;
+  isReturned?: boolean;
 }
 
 // POS Machine

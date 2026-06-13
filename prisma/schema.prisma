@@ -24,6 +24,8 @@ model User {
   customers    Customer[]
   banks        Bank[]
   posMachines  POSMachine[]
+  assignees    Assignee[]
+  collaborators Collaborator[]
 
   @@map("users")
 }
@@ -67,6 +69,9 @@ model Bank {
   cardType         String?  @map("card_type")
   lastFourDigits   String?  @map("last_four_digits") @db.VarChar(4)
   collaboratorName String?  @map("collaborator_name")
+  collaboratorId   Int?     @map("collaborator_id")
+  collaborator     Collaborator? @relation(fields: [collaboratorId], references: [id], onDelete: SetNull)
+  isReturned       Boolean  @default(false) @map("is_returned")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -74,6 +79,7 @@ model Bank {
 
   @@unique([userId, name, lastFourDigits])
   @@index([userId])
+  @@index([collaboratorId])
   @@map("banks")
 }
 
@@ -137,12 +143,15 @@ model Bill {
   rows            BillRow[]
   mergedBillId    Int?          @map("merged_bill_id")
   mergedBill      MergedBill?   @relation(fields: [mergedBillId], references: [id], onDelete: SetNull)
+  assigneeId      Int?          @map("assignee_id")
+  assignee        Assignee?     @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([timestamp])
   @@index([customerId])
   @@index([isCollected])
   @@index([mergedBillId])
+  @@index([assigneeId])
   @@map("bills")
 }
 
@@ -192,4 +201,36 @@ model PosHistoryEntry {
   @@index([billRowId])
   @@index([type])
   @@map("pos_history_entries")
+}
+
+model Assignee {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  name      String   @map("name")
+  phone     String?  @map("phone")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bills     Bill[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("assignees")
+}
+
+model Collaborator {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  name      String   @map("name")
+  phone     String?  @map("phone")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  banks     Bank[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("collaborators")
 }

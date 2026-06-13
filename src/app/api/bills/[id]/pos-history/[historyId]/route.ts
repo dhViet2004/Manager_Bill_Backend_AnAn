@@ -45,24 +45,12 @@ async function validatePosAmount(
   const depositedWithoutCurrent = row.posHistory
     .filter(history => history.type === 'DEPOSIT' && history.id !== currentHistoryId)
     .reduce((sum, history) => sum + Number(history.amount), 0);
-  const withdrawnWithoutCurrent = row.posHistory
-    .filter(history => history.type === 'WITHDRAW' && history.id !== currentHistoryId)
-    .reduce((sum, history) => sum + Number(history.amount), 0);
 
   if (type === 'DEPOSIT') {
     const maxDeposit = Math.max(Number(row.amount) - depositedWithoutCurrent, 0);
-    const minDeposit = Math.max(withdrawnWithoutCurrent - depositedWithoutCurrent, 0);
 
     if (nextAmount > maxDeposit) {
       return `Số tiền nạp không được vượt quá ${maxDeposit.toLocaleString('vi-VN')}đ`;
-    }
-    if (nextAmount < minDeposit) {
-      return `Số tiền nạp không được nhỏ hơn ${minDeposit.toLocaleString('vi-VN')}đ vì đã có lịch sử rút`;
-    }
-  } else {
-    const maxWithdraw = Math.max(depositedWithoutCurrent - withdrawnWithoutCurrent, 0);
-    if (nextAmount > maxWithdraw) {
-      return `Số tiền rút không được vượt quá ${maxWithdraw.toLocaleString('vi-VN')}đ`;
     }
   }
 
@@ -262,13 +250,6 @@ export async function DELETE(
       where: { id: historyEntryId, billRow: { billId } },
     });
     if (!entry) return notFoundResponse('POS history entry not found');
-
-    if (entry.type === 'DEPOSIT') {
-      const validationError = await validatePosAmount(entry.billRowId, entry.type, 0, entry.id);
-      if (validationError) {
-        return errorResponse('Không thể xóa lịch sử nạp này vì đã có lịch sử rút phụ thuộc', 400);
-      }
-    }
 
     await prisma.posHistoryEntry.delete({
       where: { id: historyEntryId },

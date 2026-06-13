@@ -18,17 +18,7 @@ const toLastFourDigits = (value: unknown) => {
   return normalized.replace(/\D/g, '').slice(-4) || null;
 };
 
-const transformBank = (bank: {
-  id: number;
-  name: string;
-  code: string | null;
-  cardHolderName: string | null;
-  cardType: string | null;
-  lastFourDigits: string | null;
-  collaboratorName: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}) => ({
+const transformBank = (bank: any) => ({
   id: bank.id,
   name: bank.name,
   code: bank.code || undefined,
@@ -36,6 +26,14 @@ const transformBank = (bank: {
   cardType: bank.cardType || undefined,
   lastFourDigits: bank.lastFourDigits || undefined,
   collaboratorName: bank.collaboratorName || undefined,
+  collaboratorId: bank.collaboratorId || undefined,
+  isReturned: bank.isReturned,
+  collaborator: bank.collaborator ? {
+    id: bank.collaborator.id,
+    name: bank.collaborator.name,
+    phone: bank.collaborator.phone || undefined,
+    isActive: bank.collaborator.isActive
+  } : undefined,
   createdAt: bank.createdAt,
   updatedAt: bank.updatedAt,
 });
@@ -71,6 +69,8 @@ export async function PUT(
       cardType,
       lastFourDigits,
       collaboratorName,
+      collaboratorId,
+      isReturned,
     } = body;
 
     const existingBank = await prisma.bank.findFirst({
@@ -104,6 +104,23 @@ export async function PUT(
       return errorResponse('The da ton tai', 400);
     }
 
+    // Resolve collaboratorName if collaboratorId is provided
+    let finalCollaboratorName = collaboratorName !== undefined
+      ? toOptionalString(collaboratorName)
+      : existingBank.collaboratorName;
+    const parsedCollaboratorId = collaboratorId !== undefined
+      ? (collaboratorId ? Number(collaboratorId) : null)
+      : existingBank.collaboratorId;
+
+    if (collaboratorId !== undefined && parsedCollaboratorId) {
+      const collaborator = await prisma.collaborator.findUnique({
+        where: { id: parsedCollaboratorId },
+      });
+      if (collaborator) {
+        finalCollaboratorName = collaborator.name;
+      }
+    }
+
     const bank = await prisma.bank.update({
       where: { id: bankId },
       data: {
@@ -112,7 +129,12 @@ export async function PUT(
         cardHolderName: cardHolderName !== undefined ? toOptionalString(cardHolderName) : existingBank.cardHolderName,
         cardType: cardType !== undefined ? toOptionalString(cardType) : existingBank.cardType,
         lastFourDigits: normalizedLastFourDigits,
-        collaboratorName: collaboratorName !== undefined ? toOptionalString(collaboratorName) : existingBank.collaboratorName,
+        collaboratorName: finalCollaboratorName,
+        collaboratorId: parsedCollaboratorId,
+        isReturned: isReturned !== undefined ? !!isReturned : existingBank.isReturned,
+      },
+      include: {
+        collaborator: true,
       },
     });
 

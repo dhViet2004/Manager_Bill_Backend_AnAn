@@ -25,9 +25,24 @@ export const BillRowSchema = z.object({
   paymentMethod: z.enum(['QR', 'POS', 'Link']).optional(),
 });
 
+// Assignee Schema
+export const AssigneeSchema = z.object({
+  name: z.string().min(1, 'Tên người phụ trách không được trống'),
+  phone: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+// Collaborator Schema
+export const CollaboratorSchema = z.object({
+  name: z.string().min(1, 'Tên cộng tác viên không được trống'),
+  phone: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
 // Bill Schema
 export const CreateBillSchema = z.object({
   customerId: z.number().int().positive('ID khách hàng không hợp lệ'),
+  assigneeId: z.number().int().positive().optional().nullable(),
   serviceType: ServiceTypeEnum,
   note: z.string().optional(),
   useGlobalFee: z.boolean().optional(),
@@ -42,6 +57,7 @@ export const CreateBillSchema = z.object({
 // Update Bill Schema - Chỉ cho phép cập nhật các field được phép thay đổi
 export const UpdateBillSchema = z.object({
   customerId: z.number().int().positive().optional(),
+  assigneeId: z.number().int().positive().optional().nullable(),
   serviceType: ServiceTypeEnum.optional(),
   note: z.string().optional().nullable(),
   isCollected: z.boolean().optional(),

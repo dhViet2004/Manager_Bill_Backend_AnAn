@@ -81,6 +81,7 @@ export async function GET(
       },
       include: {
         customer: true,
+        assignee: true,
         rows: {
           include: {
             collectionHistory: {
@@ -109,6 +110,12 @@ export async function GET(
         address: bill.customer.address || undefined,
         createdAt: bill.customer.createdAt,
         updatedAt: bill.customer.updatedAt,
+      } : undefined,
+      assigneeId: bill.assigneeId || undefined,
+      assignee: bill.assignee ? {
+        id: bill.assignee.id,
+        name: bill.assignee.name,
+        phone: bill.assignee.phone || undefined,
       } : undefined,
       serviceType: DbToServiceType[bill.serviceType] as ServiceType,
       note: bill.note,
@@ -193,7 +200,7 @@ export async function PUT(
       return errorResponse(`Validation error: ${result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')}`, 400);
     }
 
-    const { customerId, serviceType, note, isCollected, paymentType, paymentMethod, rows, collectionEntries, posEntries } = result.data;
+    const { customerId, assigneeId, serviceType, note, isCollected, paymentType, paymentMethod, rows, collectionEntries, posEntries } = result.data;
     console.log('[updateBill] parsed paymentType:', paymentType, 'paymentMethod:', paymentMethod);
     if (rows) {
       console.log('[updateBill] rows[0] paymentType:', rows[0]?.paymentType, 'paymentMethod:', rows[0]?.paymentMethod);
@@ -214,6 +221,7 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = {
       customerId: customerId || existingBill.customerId,
+      assigneeId: assigneeId !== undefined ? assigneeId : existingBill.assigneeId,
       serviceType: serviceType
         ? ServiceTypeToDb[serviceType as ServiceType]
         : existingBill.serviceType,
@@ -337,10 +345,6 @@ export async function PUT(
           }
           totals.deposited += amount;
         } else {
-          const maxWithdraw = Math.max(totals.deposited - totals.withdrawn, 0);
-          if (amount > maxWithdraw) {
-            return errorResponse(`Số tiền rút vượt quá số tiền có thể rút của dòng ${row.bankName || row.rowUuid}`, 400);
-          }
           totals.withdrawn += amount;
         }
 
@@ -407,6 +411,7 @@ export async function PUT(
       data: updateData,
       include: {
         customer: true,
+        assignee: true,
         rows: {
           include: {
             collectionHistory: {
@@ -431,6 +436,12 @@ export async function PUT(
         address: bill.customer.address || undefined,
         createdAt: bill.customer.createdAt,
         updatedAt: bill.customer.updatedAt,
+      } : undefined,
+      assigneeId: bill.assigneeId || undefined,
+      assignee: bill.assignee ? {
+        id: bill.assignee.id,
+        name: bill.assignee.name,
+        phone: bill.assignee.phone || undefined,
       } : undefined,
       serviceType: DbToServiceType[bill.serviceType] as ServiceType,
       note: bill.note,
@@ -507,9 +518,29 @@ export async function DELETE(
       return notFoundResponse('Bill not found');
     }
 
-    // Delete bill (cascade will delete rows)
-    await prisma.bill.delete({
-      where: { id: billId },
+    // Delete related histories and rows explicitly to ensure they are deleted
+    await prisma.$transaction(async (tx) => {
+      const rows = await tx.billRow.findMany({
+        where: { billId },
+        select: { id: true },
+      });
+      const rowIds = rows.map((r) => r.id);
+
+      if (rowIds.length > 0) {
+        await tx.collectionHistoryEntry.deleteMany({
+          where: { billRowId: { in: rowIds } },
+        });
+        await tx.posHistoryEntry.deleteMany({
+          where: { billRowId: { in: rowIds } },
+        });
+        await tx.billRow.deleteMany({
+          where: { billId },
+        });
+      }
+
+      await tx.bill.delete({
+        where: { id: billId },
+      });
     });
 
     return successResponse({ message: 'Bill deleted successfully' });

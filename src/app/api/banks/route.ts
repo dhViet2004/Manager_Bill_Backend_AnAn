@@ -17,17 +17,7 @@ const toLastFourDigits = (value: unknown) => {
   return normalized.replace(/\D/g, '').slice(-4) || null;
 };
 
-const transformBank = (bank: {
-  id: number;
-  name: string;
-  code: string | null;
-  cardHolderName: string | null;
-  cardType: string | null;
-  lastFourDigits: string | null;
-  collaboratorName: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}) => ({
+const transformBank = (bank: any) => ({
   id: bank.id,
   name: bank.name,
   code: bank.code || undefined,
@@ -35,6 +25,14 @@ const transformBank = (bank: {
   cardType: bank.cardType || undefined,
   lastFourDigits: bank.lastFourDigits || undefined,
   collaboratorName: bank.collaboratorName || undefined,
+  collaboratorId: bank.collaboratorId || undefined,
+  isReturned: bank.isReturned,
+  collaborator: bank.collaborator ? {
+    id: bank.collaborator.id,
+    name: bank.collaborator.name,
+    phone: bank.collaborator.phone || undefined,
+    isActive: bank.collaborator.isActive
+  } : undefined,
   createdAt: bank.createdAt,
   updatedAt: bank.updatedAt,
 });
@@ -55,6 +53,9 @@ export async function GET(request: NextRequest) {
     const banks = await prisma.bank.findMany({
       where: { userId: tokenUser.userId },
       orderBy: [{ name: 'asc' }, { lastFourDigits: 'asc' }],
+      include: {
+        collaborator: true,
+      },
     });
 
     return successResponse({ banks: banks.map(transformBank) });
@@ -80,6 +81,8 @@ export async function POST(request: NextRequest) {
       cardType,
       lastFourDigits,
       collaboratorName,
+      collaboratorId,
+      isReturned,
     } = body;
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
@@ -101,6 +104,18 @@ export async function POST(request: NextRequest) {
       return errorResponse('The da ton tai', 400);
     }
 
+    // Resolve collaboratorName if collaboratorId is provided
+    let finalCollaboratorName = toOptionalString(collaboratorName);
+    const parsedCollaboratorId = collaboratorId ? Number(collaboratorId) : null;
+    if (parsedCollaboratorId) {
+      const collaborator = await prisma.collaborator.findUnique({
+        where: { id: parsedCollaboratorId },
+      });
+      if (collaborator) {
+        finalCollaboratorName = collaborator.name;
+      }
+    }
+
     const bank = await prisma.bank.create({
       data: {
         userId: tokenUser.userId,
@@ -109,7 +124,12 @@ export async function POST(request: NextRequest) {
         cardHolderName: toOptionalString(cardHolderName),
         cardType: toOptionalString(cardType),
         lastFourDigits: normalizedLastFourDigits,
-        collaboratorName: toOptionalString(collaboratorName),
+        collaboratorName: finalCollaboratorName,
+        collaboratorId: parsedCollaboratorId,
+        isReturned: typeof isReturned === 'boolean' ? isReturned : false,
+      },
+      include: {
+        collaborator: true,
       },
     });
 
